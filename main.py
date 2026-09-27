@@ -144,9 +144,6 @@ async def on_message(message: discord.Message):
         await process_tasty(message, tasty_word)
 
     for f in FOODS_LIST:
-        if f in message.content:
-            await process_tasty(message, f)
-            return
         for m in message.content.split(" "):
             if m not in f:
                 continue
