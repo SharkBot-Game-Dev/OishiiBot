@@ -1,3 +1,4 @@
+import asyncio
 import random
 import re
 
@@ -7,7 +8,11 @@ import aiosqlite
 import dotenv
 import os
 
+from janome.tokenizer import Tokenizer
+
 dotenv.load_dotenv()
+
+tokenizer = Tokenizer()
 
 intents = discord.Intents.none()
 intents.message_content = True
@@ -143,11 +148,13 @@ async def on_message(message: discord.Message):
         tasty_word = tasty.group(1)
         await process_tasty(message, tasty_word)
 
+    tokens = await asyncio.to_thread(tokenizer.tokenize, message.content)
+
     for f in FOODS_LIST:
-        for m in message.content.split(" "):
-            if m not in f:
+        for t in tokens:
+            if t not in f:
                 continue
-            await process_tasty(message, m)
+            await process_tasty(message, f)
             return
 
     await bot.process_commands(message)
