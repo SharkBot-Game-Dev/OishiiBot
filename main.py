@@ -113,7 +113,11 @@ DO UPDATE SET word = ?;""", (str(tasty_word),str(tasty_word),))
         if not channel:
             return
 
-        await channel.send(embed=discord.Embed(color=discord.Color.yellow(), title=f"{tasty_word}おいしい").set_footer(text="おいしいBot").set_author(name=f"{message.author.name} ({message.author.id})", icon_url=message.author.display_avatar.url))
+        await channel.send(embed=discord.Embed(
+            color=discord.Color.yellow(),
+            title=f"{tasty_word}おいしい",
+            description=message.clean_content
+        ).set_footer(text="おいしいBot").set_author(name=f"{message.author.name} ({message.author.id})", icon_url=message.author.display_avatar.url), view=discord.ui.View(timeout=None).add_item(discord.ui.Button(label="メッセージへジャンプ", url=message.jump_url)))
             
         await cursur.execute("""INSERT INTO alerted_tasty_words (guild_id, word) VALUES (?, ?)""", (str(message.guild.id), str(tasty_word),))
         await db.commit()
@@ -164,7 +168,13 @@ async def on_message(message: discord.Message):
         if token.part_of_speech.split(",")[0] != "名詞":
             continue
 
-        if word not in FOODS:
+        ok = False
+        for f in FOODS:
+            if word not in f:
+                continue
+            ok = True
+
+        if not ok:
             continue
 
         await process_tasty(message, word)
@@ -186,7 +196,7 @@ async def help(ctx: commands.Context):
 `〇〇おいしい` おいしいものを学習させます。（失敗もあり）
 
 その他食べ物がメッセージ内容に含まれていると反応します。
-""", color=discord.Color.blue()))
+""", color=discord.Color.blue()).set_footer(text="Created by サメちゃん"))
 
 @bot.hybrid_command(name="set-channel", description="通知するチャンネルを設定します。")
 @commands.has_guild_permissions(manage_channels=True)
