@@ -36,11 +36,13 @@ except:
 
 def load_foods(path: str) -> set[str]:
     with open(path, encoding="utf-8") as f:
-        return f.read()
-
+        return {
+            line.strip()
+            for line in f
+            if line.strip()
+        }
 
 FOODS = load_foods("data/foods.txt")
-FOODS_LIST = FOODS.split("\n")
 
 def is_food(word: str) -> bool:
     return word.strip() in FOODS
@@ -57,6 +59,8 @@ async def setup_hook():
     await cursur.execute("CREATE TABLE IF NOT EXISTS tasty_words (id INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL UNIQUE)")
     await cursur.execute("CREATE TABLE IF NOT EXISTS bad_words (id INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL)")
 
+    await db.commit()
+
 @bot.event
 async def on_ready():
     print("起動しました。")
@@ -64,7 +68,7 @@ async def on_ready():
     await cursur.execute('SELECT * FROM tasty_words')
     words = await cursur.fetchall()
     for w in words:
-        FOODS_LIST.append(w[1])
+        FOODS.add(w[1])
 
     sync_tasty_words.start()
 
@@ -74,10 +78,11 @@ async def on_ready():
 
 @tasks.loop(minutes=5)
 async def sync_tasty_words():
-    await cursur.execute('SELECT * FROM tasty_words')
+    await cursur.execute("SELECT word FROM tasty_words")
     words = await cursur.fetchall()
-    for w in words:
-        FOODS_LIST.append(w[1])
+
+    for (word,) in words:
+        FOODS.add(word)
 
 async def process_tasty(message: discord.Message, tasty_word: str):
     try:
@@ -114,7 +119,8 @@ DO UPDATE SET word = ?;""", (str(tasty_word),str(tasty_word),))
         await db.commit()
 
         return
-    except:
+    except Exception as e:
+        print(f"process_tasty error: {e}")
         return
 
 @bot.event
@@ -148,14 +154,21 @@ async def on_message(message: discord.Message):
         tasty_word = tasty.group(1)
         await process_tasty(message, tasty_word)
 
-    tokens = await asyncio.to_thread(tokenizer.tokenize, message.content)
+    tokens = await asyncio.to_thread(
+        lambda: list(tokenizer.tokenize(message.content))
+    )
 
-    for f in FOODS_LIST:
-        for t in tokens:
-            if t not in f:
-                continue
-            await process_tasty(message, f)
-            return
+    for token in tokens:
+        word = token.surface.strip()
+
+        if token.part_of_speech.split(",")[0] != "名詞":
+            continue
+
+        if word not in FOODS:
+            continue
+
+        await process_tasty(message, word)
+        return
 
     await bot.process_commands(message)
 
@@ -184,7 +197,7 @@ async def set_channel(ctx: commands.Context, channel: discord.TextChannel):
     await cursur.execute("""INSERT INTO alert_channel (channel_id, guild_id)
 VALUES (?, ?)
 ON CONFLICT(guild_id)
-DO UPDATE SET channel_id = ?;""", (str(ctx.channel.id), str(ctx.guild.id), str(ctx.channel.id),))
+DO UPDATE SET channel_id = ?;""", (str(channel.id), str(ctx.guild.id), str(channel.id),))
 
     await db.commit()
 
