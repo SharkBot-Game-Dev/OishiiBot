@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+data/ngwords.txt
+data/foods.txt
+
+data.db
