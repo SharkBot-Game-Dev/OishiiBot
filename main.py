@@ -1,6 +1,7 @@
 import asyncio
 import random
 import re
+import time
 
 import discord
 from discord.ext import commands, tasks
@@ -23,6 +24,8 @@ bot = commands.Bot(command_prefix="o.", intents=intents, help_command=None)
 
 db: aiosqlite.Connection = None
 cursur: aiosqlite.Cursor = None
+
+cooldown = {}
 
 TASTY_RE = re.compile(r"(.+)おいしい")
 
@@ -71,6 +74,7 @@ async def on_ready():
         FOODS.add(w[1])
 
     sync_tasty_words.start()
+    clear_cooldowns.start()
 
     if os.environ.get('SYNC_TREE') == "0":
         return
@@ -83,6 +87,11 @@ async def sync_tasty_words():
 
     for (word,) in words:
         FOODS.add(word)
+
+@tasks.loop(hours=3)
+async def clear_cooldowns():
+    global cooldown
+    cooldown = {}
 
 async def process_tasty(message: discord.Message, tasty_word: str):
     try:
@@ -132,6 +141,10 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
+    if message.content.startswith("o."):
+        await bot.process_commands(message)
+        return
+
     if "おなかすいた" in message.content:
         await cursur.execute('SELECT * FROM tasty_words')
         words = await cursur.fetchall()
@@ -176,6 +189,12 @@ async def on_message(message: discord.Message):
 
         if not ok:
             continue
+
+        current_time = time.time()
+        last_message_time = cooldown.get(message.channel.id, 0)
+        if current_time - last_message_time < 180:
+            return
+        cooldown[message.channel.id] = current_time
 
         await process_tasty(message, word)
         return
